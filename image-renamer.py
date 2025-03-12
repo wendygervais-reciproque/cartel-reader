@@ -9,6 +9,16 @@ import numpy as np
 import re
 import threading
 import queue
+import requests
+
+
+BASE_ID = 'appKilnwj6AD0x6rC'
+TABLE_NAME = 'Oeuvres'
+URL = f'https://api.airtable.com/v0/{BASE_ID}/{TABLE_NAME}'
+
+
+def nettoyer_nom(nom):
+    return re.sub(r'[^a-zA-Z0-9_]', '_', nom)
 
 def image_to_text(filename):
     img = Image.open(filename).convert('RGB')
@@ -43,20 +53,24 @@ class ImageRenamerApp:
 
         self.setup_ui()
 
-    def setup_ui(self):
-        tk.Button(self.root, text="Choisir un dossier contenant toutes les images", command=self.choose_folder).pack(pady=30)
+    def get_airtable_credentials(self):
+        self.api_key = tk.simpledialog.askstring("API Key", "Entrez votre clé API Airtable :", show='*')
         
-        self.canvas = tk.Canvas(self.root, width=1000, height=500)
+        if not self.api_key:
+            messagebox.showwarning("Information manquante", "Entrez votre clé API Airtable")
+            return False
+        
+        return True
+
+    def setup_ui(self):
+        self.choix_label = tk.Label(self.root, text="Choisissez un dossier contenant les images dans l'ordre suivant : \n oeuvre1-cartel1-oeuvre2-cartel2...oeuvreN-cartelN.")
+        self.choix_label.pack(pady=10)
+        self.choix = tk.Button(self.root, text="Choisir un dossier contenant toutes les images", command=self.choose_folder)
+        self.choix.pack(pady=10)
+        
+        self.canvas = tk.Canvas(self.root, width=900, height=400)
         self.canvas.pack()
 
-        self.progress_bar = Progressbar(self.root, length=200, mode='determinate')
-        self.progress_bar.pack(pady=10)
-        self.progress_bar["value"] = 0  # Valeur initiale de la barre à 0%
-
-        # Masquer la barre de progression initialement
-        self.progress_bar.pack_forget()
-
-        # Variables pour les champs de saisie
         self.artist_var = tk.StringVar()
         self.title_var = tk.StringVar()
         self.date_var = tk.StringVar()
@@ -69,11 +83,16 @@ class ImageRenamerApp:
         
         tk.Label(self.root, text="Date :").pack()
         tk.Entry(self.root, textvariable=self.date_var).pack()
+
+        self.progress_bar = Progressbar(self.root, length=500, mode='determinate',)
+        self.progress_bar.pack(pady=10)
+        self.progress_bar["value"] = 0 
+        self.progress_bar.pack_forget()
         
-        # Bouton de validation
         self.validation = tk.Button(self.root, text="Enregistrer et passer à l'oeuvre suivante", command=self.save_and_next)
         self.validation.pack(pady=30)
         self.validation.config(state=tk.DISABLED)
+        tk.Label(self.root, text="En cliquant sur enregistrer, l'image sera renommée et les informations de l'oeuvre ajoutées à la BDD. \n Une fois toutes les images traitées, une fenêtre vous proposera d'enregistrer toutes les infos au format CSV.").pack(pady=30)
 
     def choose_folder(self):
         folder_path = filedialog.askdirectory()
@@ -81,11 +100,14 @@ class ImageRenamerApp:
             self.image_pairs = self.find_image_pairs(folder_path)
             if self.image_pairs:
                 self.show_images()
+                self.choix_label.pack_forget()
+                self.choix.pack_forget()
+                self.validation.config(state=tk.NORMAL)
+
             else:
                 messagebox.showwarning("Avertissement", "Aucune paire d'images trouvée.")
 
     def find_image_pairs(self, folder_path):
-        self.validation.config(state=tk.NORMAL)
         images = sorted([f for f in os.listdir(folder_path) if f.lower().endswith(('png', 'jpg', 'jpeg'))])
         pairs = [(images[i], images[i + 1]) for i in range(0, len(images) - 1, 2)]
         return [(os.path.join(folder_path, p[0]), os.path.join(folder_path, p[1])) for p in pairs]
@@ -102,41 +124,33 @@ class ImageRenamerApp:
             self.progress_bar.pack(pady=10)  # Afficher la barre de progression
             self.update_progress_bar(1)  # Lancer l'incrémentation
 
-            # Lancer un thread pour traiter l'image et extraire le texte
             threading.Thread(target=self.process_image, args=(label_path, art_img, label_img), daemon=True).start()
 
     def load_image(self, path):
-        img = Image.open(path).resize((400, 400))
+        img = Image.open(path).resize((350,400))
         return ImageTk.PhotoImage(img)
 
     def process_image(self, label_path, art_img, label_img):
-        # Traitement de l'image dans le thread secondaire
         artiste, titre, annee = image_to_text(label_path)
 
-        # Mettre à jour la barre de progression
         for i in range(1, 101):
-            self.progress_bar["value"] = i  # Augmenter la valeur de la barre (de 0% à 100%)
-            self.root.after(10)  # Attendre un peu avant d'augmenter la valeur pour simuler l'avancement
+            self.progress_bar["value"] = i  
+            self.root.after(10) 
 
-        # Lorsque le traitement est terminé, mettre à jour l'interface avec les résultats
         self.queue.put((artiste, titre, annee, art_img, label_img))
 
-        # Pour ne pas bloquer l'interface, nous utilisons la queue pour traiter les résultats dans le thread principal.
         self.root.after(100, self.update_ui)
 
     def update_ui(self):
-        # Vérifier si des résultats sont dans la queue
         if not self.queue.empty():
             artiste, titre, annee, art_img, label_img = self.queue.get()
 
-            # Mettre à jour les champs texte dans l'interface utilisateur
             self.artist_var.set(artiste if artiste else "")
             self.title_var.set(titre if titre else "")
             self.date_var.set(annee if annee else "")
             
-            # Afficher les images dans le canevas
             self.canvas.delete("all")
-            self.canvas.create_image(250, 250, anchor=tk.CENTER, image=art_img)
+            self.canvas.create_image(200, 250, anchor=tk.CENTER, image=art_img)
             self.canvas.create_image(750, 250, anchor=tk.CENTER, image=label_img)
             
             self.art_img = art_img  # Garder les références pour éviter la collecte de déchets
@@ -160,11 +174,11 @@ class ImageRenamerApp:
         date = self.date_var.get().strip()
         
         if artist and title and date:
-            new_name = f"{os.path.basename(art_path).split('.')[0]}_{artist}_{title}_{date}.jpg"
+            new_name = f"{os.path.basename(art_path).split('.')[0]}_{nettoyer_nom(title)}_{nettoyer_nom(artist)}_{nettoyer_nom(date)}.jpg"
             new_path = os.path.join(os.path.dirname(art_path), new_name)
             os.rename(art_path, new_path)
             
-            self.csv_data.append([artist, title, date, new_name])
+            self.csv_data.append([title, artist, date, new_name])
             self.current_index += 1
             
             if self.current_index < len(self.image_pairs):
@@ -172,7 +186,7 @@ class ImageRenamerApp:
             else:
                 self.finish_process()
         else:
-            messagebox.showwarning("Champs vides", "Veuillez remplir tous les champs !")
+            messagebox.showwarning("Champs vides", "Veuillez remplir tous les champs")
 
     def finish_process(self):
         save_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
@@ -183,6 +197,30 @@ class ImageRenamerApp:
                 writer.writerows(self.csv_data)
             
             messagebox.showinfo("Terminé", "CSV enregistré avec succès !")
+
+        if self.get_airtable_credentials():
+            # Push to Airtable
+            HEADERS = {
+                'Authorization': f'Bearer {self.api_key}',
+                'Content-Type': 'application/json'
+            }
+            for row in self.csv_data:
+                record = {
+                    "fields": {
+                        "Artiste": row[0],
+                        "Titre": row[1],
+                        "Date": row[2],
+                        "Nom fichier": row[3]
+                    }
+                }
+                response = requests.post(URL, headers=HEADERS, json=record)
+                
+                if response.status_code != 200:
+                    messagebox.showerror("Erreur", f"Échec de l'envoi à Airtable : {response.status_code}\n{response.json()}")
+                    return
+            
+            messagebox.showinfo("Terminé", "Données envoyées à Airtable avec succès !")
+        
         
         self.validation.config(state=tk.DISABLED)
         
@@ -193,3 +231,4 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = ImageRenamerApp(root)
     root.mainloop()
+
