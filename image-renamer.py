@@ -10,6 +10,8 @@ import re
 import threading
 import queue
 import requests
+from PIL import Image
+import piexif
 
 
 BASE_ID = 'appKilnwj6AD0x6rC'
@@ -40,6 +42,25 @@ def image_to_text(filename):
 
     return artiste, titre, annee
 
+
+def ajouter_exif(image_path, title, artist, date):
+    # Ouvrir l'image
+    image = Image.open(image_path)
+
+    # Récupérer les métadonnées EXIF existantes
+    exif_dict = piexif.load(image.info['exif'])
+
+    # Ajouter ou modifier les champs EXIF spécifiques
+    exif_dict["0th"][piexif.ImageIFD.Artist] = artist
+    exif_dict["0th"][piexif.ImageIFD.ImageDescription] = title
+    exif_dict["Exif"][piexif.ExifIFD.DateTimeOriginal] = date
+
+    # Convertir les métadonnées EXIF modifiées en bytes
+    exif_bytes = piexif.dump(exif_dict)
+
+    # Enregistrer l'image avec les nouvelles métadonnées EXIF
+    image.save(image_path, exif=exif_bytes)
+
 class ImageRenamerApp:
     def __init__(self, root):
         self.root = root
@@ -67,6 +88,13 @@ class ImageRenamerApp:
         self.choix_label.pack(pady=10)
         self.choix = tk.Button(self.root, text="Choisir un dossier contenant toutes les images", command=self.choose_folder)
         self.choix.pack(pady=10)
+
+        self.lieu_expo = tk.StringVar()
+        self.date_expo = tk.StringVar()
+        tk.Label(self.root, text="Lieu de l'exposition :").pack()
+        tk.Entry(self.root, textvariable=self.lieu_expo).pack()
+        tk.Label(self.root, text="Date de visite de l'exposition :").pack()
+        tk.Entry(self.root, textvariable=self.date_expo).pack()
         
         self.canvas = tk.Canvas(self.root, width=900, height=400)
         self.canvas.pack()
@@ -103,6 +131,8 @@ class ImageRenamerApp:
                 self.choix_label.pack_forget()
                 self.choix.pack_forget()
                 self.validation.config(state=tk.NORMAL)
+                self.lieu_expo.set(folder_path)
+                
 
             else:
                 messagebox.showwarning("Avertissement", "Aucune paire d'images trouvée.")
@@ -179,6 +209,7 @@ class ImageRenamerApp:
             os.rename(art_path, new_path)
             
             self.csv_data.append([title, artist, date, new_name])
+            ajouter_exif(new_path, title, artist, date)
             self.current_index += 1
             
             if self.current_index < len(self.image_pairs):
@@ -193,7 +224,7 @@ class ImageRenamerApp:
         if save_path:
             with open(save_path, mode='w', newline='', encoding='utf-8') as file:
                 writer = csv.writer(file)
-                writer.writerow(["Artiste", "Titre", "Date", "Nom fichier"])
+                writer.writerow(["Titre", "Artiste", "Date", "Nom fichier"])
                 writer.writerows(self.csv_data)
             
             messagebox.showinfo("Terminé", "CSV enregistré avec succès !")
@@ -207,8 +238,8 @@ class ImageRenamerApp:
             for row in self.csv_data:
                 record = {
                     "fields": {
-                        "Artiste": row[0],
-                        "Titre": row[1],
+                        "Titre": row[0],
+                        "Artiste": row[1],
                         "Date": row[2],
                         "Nom fichier": row[3]
                     }

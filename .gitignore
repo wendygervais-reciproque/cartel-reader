@@ -2,3 +2,5 @@
 *.csv
 *.HEIC
 /doc
+/build
+/dist
