@@ -12,7 +12,7 @@ import queue
 import requests
 from PIL import Image
 import piexif
-
+from pillow_heif import register_heif_opener
 
 BASE_ID = 'appKilnwj6AD0x6rC'
 TABLE_NAME = 'Oeuvres'
@@ -23,6 +23,7 @@ def nettoyer_nom(nom):
     return re.sub(r'[^a-zA-Z0-9_]', '_', nom)
 
 def image_to_text(filename):
+    register_heif_opener()
     img = Image.open(filename).convert('RGB')
     img = img.resize((img.width // 2, img.height // 2), Image.Resampling.LANCZOS)
     img_np = np.array(img)
@@ -42,9 +43,12 @@ def image_to_text(filename):
 
     return artiste, titre, annee
 
+def bouton():
+    print("clic")
 
 def ajouter_exif(image_path, title, artist, date):
     # Ouvrir l'image
+    register_heif_opener()
     image = Image.open(image_path)
 
     # Récupérer les métadonnées EXIF existantes
@@ -102,9 +106,27 @@ class ImageRenamerApp:
         self.artist_var = tk.StringVar()
         self.title_var = tk.StringVar()
         self.date_var = tk.StringVar()
-        
+        frame_principal = tk.Frame(self.root)
+        frame_principal.pack(pady=10)
+
+        # Première paire de boutons
+        frame_boutons1 = tk.Frame(frame_principal)
+        frame_boutons1.pack(side=tk.LEFT, padx=100)  # Espacement entre les paires
+
+        tk.Button(frame_boutons1, text="←", command=self.previous_oeuvre).pack(side=tk.LEFT, padx=5)
+        tk.Button(frame_boutons1, text="→", command=self.next_oeuvre).pack(side=tk.LEFT, padx=5)
+
+        # Deuxième paire de boutons
+        frame_boutons2 = tk.Frame(frame_principal)
+        frame_boutons2.pack(side=tk.LEFT, padx=100)
+
+        tk.Button(frame_boutons2, text="←", command=self.previous_cartel).pack(side=tk.LEFT, padx=5)
+        tk.Button(frame_boutons2, text="→", command=self.next_cartel).pack(side=tk.LEFT, padx=5)
+
+
         tk.Label(self.root, text="Artiste :").pack()
         tk.Entry(self.root, textvariable=self.artist_var).pack()
+
         
         tk.Label(self.root, text="Titre :").pack()
         tk.Entry(self.root, textvariable=self.title_var).pack()
@@ -122,6 +144,18 @@ class ImageRenamerApp:
         self.validation.config(state=tk.DISABLED)
         tk.Label(self.root, text="En cliquant sur enregistrer, l'image sera renommée et les informations de l'oeuvre ajoutées à la BDD. \n Une fois toutes les images traitées, une fenêtre vous proposera d'enregistrer toutes les infos au format CSV.").pack(pady=30)
 
+    def previous_oeuvre(self):
+        print("-1")
+    
+    def next_oeuvre(self):
+        print("+1")
+    
+    def previous_cartel(self):
+        print("-2")
+
+    def next_cartel(self):
+        print("+2")
+
     def choose_folder(self):
         folder_path = filedialog.askdirectory()
         if folder_path:
@@ -131,14 +165,14 @@ class ImageRenamerApp:
                 self.choix_label.pack_forget()
                 self.choix.pack_forget()
                 self.validation.config(state=tk.NORMAL)
-                self.lieu_expo.set(folder_path)
+                self.lieu_expo.set(folder_path.split("/")[-1])
                 
 
             else:
                 messagebox.showwarning("Avertissement", "Aucune paire d'images trouvée.")
 
     def find_image_pairs(self, folder_path):
-        images = sorted([f for f in os.listdir(folder_path) if f.lower().endswith(('png', 'jpg', 'jpeg'))])
+        images = sorted([f for f in os.listdir(folder_path) if f.lower().endswith(('png', 'jpg', 'jpeg', 'heic'))])
         pairs = [(images[i], images[i + 1]) for i in range(0, len(images) - 1, 2)]
         return [(os.path.join(folder_path, p[0]), os.path.join(folder_path, p[1])) for p in pairs]
 
@@ -157,6 +191,7 @@ class ImageRenamerApp:
             threading.Thread(target=self.process_image, args=(label_path, art_img, label_img), daemon=True).start()
 
     def load_image(self, path):
+        register_heif_opener()
         img = Image.open(path).resize((350,400))
         return ImageTk.PhotoImage(img)
 
@@ -180,6 +215,7 @@ class ImageRenamerApp:
             self.date_var.set(annee if annee else "")
             
             self.canvas.delete("all")
+
             self.canvas.create_image(200, 250, anchor=tk.CENTER, image=art_img)
             self.canvas.create_image(750, 250, anchor=tk.CENTER, image=label_img)
             
