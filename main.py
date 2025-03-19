@@ -13,6 +13,10 @@ import requests
 from PIL import Image
 import piexif
 from pillow_heif import register_heif_opener
+from datetime import datetime
+import locale
+locale.setlocale(locale.LC_TIME, 'fr_FR.UTF-8')  # Pour Linux et macOS
+# locale.setlocale(locale.LC_TIME, 'French_France.1252')  # Pour Windows
 
 BASE_ID = 'appKilnwj6AD0x6rC'
 TABLE_NAME = 'Oeuvres'
@@ -20,7 +24,10 @@ URL = f'https://api.airtable.com/v0/{BASE_ID}/{TABLE_NAME}'
 
 
 def nettoyer_nom(nom):
-    return re.sub(r'[^a-zA-Z0-9_]', '_', nom)
+    if (nom):
+        return re.sub(r'[^a-zA-Z0-9_]', '_', nom)
+    else:
+        return ""
 
 def image_to_text(filename):
     register_heif_opener()
@@ -46,24 +53,19 @@ def image_to_text(filename):
 def bouton():
     print("clic")
 
-def ajouter_exif(image_path, title, artist, date):
-    # Ouvrir l'image
-    register_heif_opener()
-    image = Image.open(image_path)
+# def ajouter_exif(image_path, title, artist, date):
+#     register_heif_opener()
+#     image = Image.open(image_path)
 
-    # Récupérer les métadonnées EXIF existantes
-    exif_dict = piexif.load(image.info['exif'])
+#     exif_dict = piexif.load(image.info['exif'])
 
-    # Ajouter ou modifier les champs EXIF spécifiques
-    exif_dict["0th"][piexif.ImageIFD.Artist] = artist
-    exif_dict["0th"][piexif.ImageIFD.ImageDescription] = title
-    exif_dict["Exif"][piexif.ExifIFD.DateTimeOriginal] = date
+#     exif_dict["0th"][piexif.ImageIFD.Artist] = artist
+#     exif_dict["0th"][piexif.ImageIFD.ImageDescription] = title
+#     exif_dict["Exif"][piexif.ExifIFD.DateTimeOriginal] = date
 
-    # Convertir les métadonnées EXIF modifiées en bytes
-    exif_bytes = piexif.dump(exif_dict)
+#     exif_bytes = piexif.dump(exif_dict)
 
-    # Enregistrer l'image avec les nouvelles métadonnées EXIF
-    image.save(image_path, exif=exif_bytes)
+#     image.save(image_path, exif=exif_bytes)
 
 class ImageRenamerApp:
     def __init__(self, root):
@@ -79,10 +81,10 @@ class ImageRenamerApp:
         self.setup_ui()
 
     def get_airtable_credentials(self):
-        self.api_key = tk.simpledialog.askstring("API Key", "Entrez votre clé API Airtable :", show='*')
+        self.api_key = tk.simpledialog.askstring("API Key", "Entrez votre token Airtable (jeton d’accès personnel) :", show='*')
         
         if not self.api_key:
-            messagebox.showwarning("Information manquante", "Entrez votre clé API Airtable")
+            messagebox.showwarning("Information manquante", "Entrez votre token Airtable (jeton d’accès personnel) :")
             return False
         
         return True
@@ -95,6 +97,7 @@ class ImageRenamerApp:
 
         self.lieu_expo = tk.StringVar()
         self.date_expo = tk.StringVar()
+
         tk.Label(self.root, text="Lieu de l'exposition :").pack()
         tk.Entry(self.root, textvariable=self.lieu_expo).pack()
         tk.Label(self.root, text="Date de visite de l'exposition :").pack()
@@ -109,25 +112,21 @@ class ImageRenamerApp:
         frame_principal = tk.Frame(self.root)
         frame_principal.pack(pady=10)
 
-        # Première paire de boutons
         frame_boutons1 = tk.Frame(frame_principal)
-        frame_boutons1.pack(side=tk.LEFT, padx=100)  # Espacement entre les paires
+        frame_boutons1.pack(side=tk.LEFT, padx=100) 
 
         tk.Button(frame_boutons1, text="←", command=self.previous_oeuvre).pack(side=tk.LEFT, padx=5)
         tk.Button(frame_boutons1, text="→", command=self.next_oeuvre).pack(side=tk.LEFT, padx=5)
 
-        # Deuxième paire de boutons
         frame_boutons2 = tk.Frame(frame_principal)
         frame_boutons2.pack(side=tk.LEFT, padx=100)
 
         tk.Button(frame_boutons2, text="←", command=self.previous_cartel).pack(side=tk.LEFT, padx=5)
         tk.Button(frame_boutons2, text="→", command=self.next_cartel).pack(side=tk.LEFT, padx=5)
 
-
         tk.Label(self.root, text="Artiste :").pack()
         tk.Entry(self.root, textvariable=self.artist_var).pack()
 
-        
         tk.Label(self.root, text="Titre :").pack()
         tk.Entry(self.root, textvariable=self.title_var).pack()
         
@@ -165,7 +164,13 @@ class ImageRenamerApp:
                 self.choix_label.pack_forget()
                 self.choix.pack_forget()
                 self.validation.config(state=tk.NORMAL)
-                self.lieu_expo.set(folder_path.split("/")[-1])
+
+                self.lieu_expo.set(folder_path.split("/")[-1])   
+
+                mod_time = os.path.getmtime(folder_path)
+                mod_time_obj = datetime.fromtimestamp(mod_time)
+                mod_date = mod_time_obj.strftime('%B %Y')
+                self.date_expo.set(mod_date)
                 
 
             else:
@@ -183,10 +188,9 @@ class ImageRenamerApp:
             art_img = self.load_image(art_path)
             label_img = self.load_image(label_path)
 
-            # Afficher la barre de progression pendant le traitement
             self.progress_bar["value"] = 0
-            self.progress_bar.pack(pady=10)  # Afficher la barre de progression
-            self.update_progress_bar(1)  # Lancer l'incrémentation
+            self.progress_bar.pack(pady=10)
+            self.update_progress_bar(1)
 
             threading.Thread(target=self.process_image, args=(label_path, art_img, label_img), daemon=True).start()
 
@@ -219,10 +223,9 @@ class ImageRenamerApp:
             self.canvas.create_image(200, 250, anchor=tk.CENTER, image=art_img)
             self.canvas.create_image(750, 250, anchor=tk.CENTER, image=label_img)
             
-            self.art_img = art_img  # Garder les références pour éviter la collecte de déchets
+            self.art_img = art_img  
             self.label_img = label_img
 
-            # Cacher la barre de progression si elle est à 100%
             self.update_progress_bar(100)
 
     def update_progress_bar(self, value):
@@ -238,35 +241,34 @@ class ImageRenamerApp:
         artist = self.artist_var.get().strip()
         title = self.title_var.get().strip()
         date = self.date_var.get().strip()
+        lieu = self.lieu_expo.get().strip()
+        expodate = self.date_expo.get().strip()
+
+        new_name = f"{os.path.basename(art_path).split('.')[0]}_{nettoyer_nom(title)}_{nettoyer_nom(artist)}_{nettoyer_nom(date)}.jpg"
+        new_path = os.path.join(os.path.dirname(art_path), new_name)
+        os.rename(art_path, new_path)
         
-        if artist and title and date:
-            new_name = f"{os.path.basename(art_path).split('.')[0]}_{nettoyer_nom(title)}_{nettoyer_nom(artist)}_{nettoyer_nom(date)}.jpg"
-            new_path = os.path.join(os.path.dirname(art_path), new_name)
-            os.rename(art_path, new_path)
-            
-            self.csv_data.append([title, artist, date, new_name])
-            ajouter_exif(new_path, title, artist, date)
-            self.current_index += 1
-            
-            if self.current_index < len(self.image_pairs):
-                self.show_images()
-            else:
-                self.finish_process()
+        self.csv_data.append([title, artist, date, new_name, lieu, expodate])
+        #ajouter_exif(new_path, title, artist, date)
+        self.current_index += 1
+        
+        if self.current_index < len(self.image_pairs):
+            self.show_images()
         else:
-            messagebox.showwarning("Champs vides", "Veuillez remplir tous les champs")
+            self.finish_process()
+
 
     def finish_process(self):
         save_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
         if save_path:
             with open(save_path, mode='w', newline='', encoding='utf-8') as file:
                 writer = csv.writer(file)
-                writer.writerow(["Titre", "Artiste", "Date", "Nom fichier"])
+                writer.writerow(["Titre", "Artiste", "Date", "Nom fichier", "Lieu expo", "Date expo"])
                 writer.writerows(self.csv_data)
             
             messagebox.showinfo("Terminé", "CSV enregistré avec succès !")
 
         if self.get_airtable_credentials():
-            # Push to Airtable
             HEADERS = {
                 'Authorization': f'Bearer {self.api_key}',
                 'Content-Type': 'application/json'
@@ -277,7 +279,9 @@ class ImageRenamerApp:
                         "Titre": row[0],
                         "Artiste": row[1],
                         "Date": row[2],
-                        "Nom fichier": row[3]
+                        "Nom fichier": row[3],
+                        "Lieu expo": row[4],
+                        "Date expo": row[5]
                     }
                 }
                 response = requests.post(URL, headers=HEADERS, json=record)
