@@ -73,6 +73,10 @@ class ImageRenamerApp:
         self.root.title("Outil cartels FFO-WGE")
         
         self.image_pairs = []
+
+        self.oeuvres = []
+        self.cartels = []
+
         self.current_index = 0
 
         self.current_oeuvre = 0
@@ -158,25 +162,34 @@ class ImageRenamerApp:
         tk.Label(self.root, text="En cliquant sur enregistrer, l'image sera renommée et les informations de l'oeuvre ajoutées à la BDD. \n Une fois toutes les images traitées, une fenêtre vous proposera d'enregistrer toutes les infos au format CSV, puis de pousser sur Airtable.").pack(pady=30)
 
     def previous_oeuvre(self):
-        self.current_oeuvre -=1
-    
+        if self.current_oeuvre > 0:
+            self.current_oeuvre -= 1
+            self.show_images()
+
     def next_oeuvre(self):
-        self.current_oeuvre +=1
-    
+        if self.current_oeuvre < len(self.oeuvres) - 1:
+            self.current_oeuvre += 1
+            self.show_images()
+
     def previous_cartel(self):
-        self.current_cartel -=1
+        if self.current_cartel > 0:
+            self.current_cartel -= 1
+            self.show_images()
 
     def next_cartel(self):
-        self.current_cartel +=1
+        if self.current_cartel < len(self.cartels) - 1:
+            self.current_cartel += 1
+            self.show_images()
 
     
     def choose_folder(self):
         folder_path = filedialog.askdirectory()
         if folder_path:
-            self.image_pairs = self.find_image_pairs(folder_path)
+            self.find_images(folder_path)
             print(self.image_pairs)
-            if self.image_pairs:
-                self.show_images(self.current_index)
+            if self.oeuvres and self.cartels:
+                self.show_images()
+
                 self.choix_label.pack_forget()
                 self.choix.pack_forget()
                 self.validation.config(state=tk.NORMAL)
@@ -196,19 +209,35 @@ class ImageRenamerApp:
         pairs = [(images[i], images[i + 1]) for i in range(0, len(images) - 1, 2)]
         return [(os.path.join(folder_path, p[0]), os.path.join(folder_path, p[1])) for p in pairs]
 
-    def show_images(self, index):
-        if self.current_index < len(self.image_pairs):
-            art_path, label_path = self.image_pairs[index]
-            
-            art_img = self.load_image(art_path)
-            label_img = self.load_image(label_path)
+    def find_images(self, folder_path):
+        images = sorted([f for f in os.listdir(folder_path) if f.lower().endswith(('png', 'jpg', 'jpeg', 'heic'))])
+        image_paths = [os.path.join(folder_path, img) for img in images]
+        self.oeuvres = image_paths.copy()
+        self.cartels = image_paths.copy()
 
-            self.progress_bar["value"] = 0
-            self.progress_bar.pack(pady=10)
-            self.update_progress_bar(1)
 
-            #threading.Thread(target=self.process_image, args=(label_path, art_img, label_img), daemon=True).start()
-            self.process_image(label_path, art_img, label_img)
+
+    def show_images(self):
+        art_img = None
+        label_img = None
+
+        if self.current_oeuvre < len(self.oeuvres):
+            art_img = self.load_image(self.oeuvres[self.current_oeuvre])
+
+        if self.current_cartel < len(self.cartels):
+            label_img = self.load_image(self.cartels[self.current_cartel])
+            self.process_image(self.cartels[self.current_cartel])
+
+        self.canvas.delete("all")
+
+        if art_img:
+            self.canvas.create_image(200, 250, anchor=tk.CENTER, image=art_img)
+            self.art_img = art_img
+
+        if label_img:
+            self.canvas.create_image(750, 250, anchor=tk.CENTER, image=label_img)
+            self.label_img = label_img
+
 
 
     def load_image(self, path):
@@ -216,34 +245,23 @@ class ImageRenamerApp:
         img = Image.open(path).resize((350,400))
         return ImageTk.PhotoImage(img)
 
-    def process_image(self, label_path, art_img, label_img):
+
+    def process_image(self, label_path):
         artiste, titre, annee = image_to_text(label_path)
-
-        for i in range(1, 101):
-            self.progress_bar["value"] = i  
-            self.root.after(10) 
-
-        self.queue.put((artiste, titre, annee, art_img, label_img))
-
+        self.queue.put((artiste, titre, annee))
         self.root.after(100, self.update_ui)
+
 
     def update_ui(self):
         if not self.queue.empty():
-            artiste, titre, annee, art_img, label_img = self.queue.get()
+            artiste, titre, annee = self.queue.get()
 
             self.artist_var.set(artiste if artiste else "")
             self.title_var.set(titre if titre else "")
             self.date_var.set(annee if annee else "")
-            
-            self.canvas.delete("all")
-
-            self.canvas.create_image(200, 250, anchor=tk.CENTER, image=art_img)
-            self.canvas.create_image(750, 250, anchor=tk.CENTER, image=label_img)
-            
-            self.art_img = art_img  
-            self.label_img = label_img
 
             self.update_progress_bar(100)
+
 
     def update_progress_bar(self, value):
         """Met à jour la barre de progression et masque/affiche en fonction de la valeur."""
@@ -254,7 +272,11 @@ class ImageRenamerApp:
         self.progress_bar["value"] = value
 
     def save_and_next(self):
-        art_path, _ = self.image_pairs[self.current_index]
+        if self.current_oeuvre >= len(self.oeuvres):
+            self.finish_process()
+            return
+
+        art_path = self.oeuvres[self.current_oeuvre]
         artist = self.artist_var.get().strip()
         title = self.title_var.get().strip()
         date = self.date_var.get().strip()
@@ -263,22 +285,23 @@ class ImageRenamerApp:
 
         new_name = f"{os.path.basename(art_path).split('.')[0]}_{nettoyer_nom(title)}_{nettoyer_nom(artist)}_{nettoyer_nom(date)}.jpg"
         new_path = os.path.join(os.path.dirname(art_path), new_name)
+
+        # ✅ Correction ici
         os.rename(art_path, new_path)
-        
+        self.oeuvres[self.current_oeuvre] = new_path  # Mettre à jour la référence au nouveau nom
+
         self.csv_data.append([title, artist, date, new_name, lieu, expodate])
-        #ajouter_exif(new_path, title, artist, date)
-        self.current_index += 1
+        # ajouter_exif(new_path, title, artist, date)
+
         self.current_oeuvre += 1
         self.current_cartel += 1
 
-        print(self.current_index)
-        print(self.current_oeuvre)
-        print(self.current_cartel)
-        
-        if self.current_index < len(self.image_pairs):
-            self.show_images(self.current_index)
+        if self.current_oeuvre < len(self.oeuvres):
+            self.show_images()
         else:
             self.finish_process()
+
+
 
 
     def finish_process(self):
