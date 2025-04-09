@@ -70,10 +70,14 @@ def bouton():
 class ImageRenamerApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Image Renamer")
+        self.root.title("Outil cartels FFO-WGE")
         
         self.image_pairs = []
         self.current_index = 0
+
+        self.current_oeuvre = 0
+        self.current_cartel = 1
+
         self.csv_data = []
         
         self.queue = queue.Queue()
@@ -90,9 +94,9 @@ class ImageRenamerApp:
         return True
 
     def setup_ui(self):
-        self.choix_label = tk.Label(self.root, text="Choisissez un dossier contenant les images dans l'ordre suivant : \n oeuvre1-cartel1-oeuvre2-cartel2...oeuvreN-cartelN.")
+        self.choix_label = tk.Label(self.root, text="Choisissez un dossier contenant toutes les images")
         self.choix_label.pack(pady=10)
-        self.choix = tk.Button(self.root, text="Choisir un dossier contenant toutes les images", command=self.choose_folder)
+        self.choix = tk.Button(self.root, text="Choisir...", command=self.choose_folder)
         self.choix.pack(pady=10)
 
         self.lieu_expo = tk.StringVar()
@@ -115,14 +119,24 @@ class ImageRenamerApp:
         frame_boutons1 = tk.Frame(frame_principal)
         frame_boutons1.pack(side=tk.LEFT, padx=100) 
 
-        tk.Button(frame_boutons1, text="←", command=self.previous_oeuvre).pack(side=tk.LEFT, padx=5)
-        tk.Button(frame_boutons1, text="→", command=self.next_oeuvre).pack(side=tk.LEFT, padx=5)
+        self.button_previous_oeuvre = tk.Button(frame_boutons1, text="←", command=self.previous_oeuvre)
+        self.button_previous_oeuvre.pack(side=tk.LEFT, padx=5)
+        #self.button_previous_oeuvre["state"] = tk.DISABLED
+
+        self.button_next_oeuvre = tk.Button(frame_boutons1, text="→", command=self.next_oeuvre)
+        self.button_next_oeuvre.pack(side=tk.LEFT, padx=5)
+        #self.button_next_oeuvre["state"] = tk.DISABLED
 
         frame_boutons2 = tk.Frame(frame_principal)
         frame_boutons2.pack(side=tk.LEFT, padx=100)
 
-        tk.Button(frame_boutons2, text="←", command=self.previous_cartel).pack(side=tk.LEFT, padx=5)
-        tk.Button(frame_boutons2, text="→", command=self.next_cartel).pack(side=tk.LEFT, padx=5)
+        self.button_previous_cartel = tk.Button(frame_boutons2, text="←", command=self.previous_cartel)
+        self.button_previous_cartel.pack(side=tk.LEFT, padx=5)
+        #self.button_previous_cartel["state"] = tk.DISABLED
+
+        self.button_next_cartel = tk.Button(frame_boutons2, text="→", command=self.next_cartel)
+        self.button_next_cartel.pack(side=tk.LEFT, padx=5)
+        #self.button_next_cartel["state"] = tk.DISABLED
 
         tk.Label(self.root, text="Artiste :").pack()
         tk.Entry(self.root, textvariable=self.artist_var).pack()
@@ -141,26 +155,28 @@ class ImageRenamerApp:
         self.validation = tk.Button(self.root, text="Enregistrer et passer à l'oeuvre suivante", command=self.save_and_next)
         self.validation.pack(pady=30)
         self.validation.config(state=tk.DISABLED)
-        tk.Label(self.root, text="En cliquant sur enregistrer, l'image sera renommée et les informations de l'oeuvre ajoutées à la BDD. \n Une fois toutes les images traitées, une fenêtre vous proposera d'enregistrer toutes les infos au format CSV.").pack(pady=30)
+        tk.Label(self.root, text="En cliquant sur enregistrer, l'image sera renommée et les informations de l'oeuvre ajoutées à la BDD. \n Une fois toutes les images traitées, une fenêtre vous proposera d'enregistrer toutes les infos au format CSV, puis de pousser sur Airtable.").pack(pady=30)
 
     def previous_oeuvre(self):
-        print("-1")
+        self.current_oeuvre -=1
     
     def next_oeuvre(self):
-        print("+1")
+        self.current_oeuvre +=1
     
     def previous_cartel(self):
-        print("-2")
+        self.current_cartel -=1
 
     def next_cartel(self):
-        print("+2")
+        self.current_cartel +=1
 
+    
     def choose_folder(self):
         folder_path = filedialog.askdirectory()
         if folder_path:
             self.image_pairs = self.find_image_pairs(folder_path)
+            print(self.image_pairs)
             if self.image_pairs:
-                self.show_images()
+                self.show_images(self.current_index)
                 self.choix_label.pack_forget()
                 self.choix.pack_forget()
                 self.validation.config(state=tk.NORMAL)
@@ -172,7 +188,6 @@ class ImageRenamerApp:
                 mod_date = mod_time_obj.strftime('%B %Y')
                 self.date_expo.set(mod_date)
                 
-
             else:
                 messagebox.showwarning("Avertissement", "Aucune paire d'images trouvée.")
 
@@ -181,9 +196,9 @@ class ImageRenamerApp:
         pairs = [(images[i], images[i + 1]) for i in range(0, len(images) - 1, 2)]
         return [(os.path.join(folder_path, p[0]), os.path.join(folder_path, p[1])) for p in pairs]
 
-    def show_images(self):
+    def show_images(self, index):
         if self.current_index < len(self.image_pairs):
-            art_path, label_path = self.image_pairs[self.current_index]
+            art_path, label_path = self.image_pairs[index]
             
             art_img = self.load_image(art_path)
             label_img = self.load_image(label_path)
@@ -192,7 +207,9 @@ class ImageRenamerApp:
             self.progress_bar.pack(pady=10)
             self.update_progress_bar(1)
 
-            threading.Thread(target=self.process_image, args=(label_path, art_img, label_img), daemon=True).start()
+            #threading.Thread(target=self.process_image, args=(label_path, art_img, label_img), daemon=True).start()
+            self.process_image(label_path, art_img, label_img)
+
 
     def load_image(self, path):
         register_heif_opener()
@@ -251,9 +268,15 @@ class ImageRenamerApp:
         self.csv_data.append([title, artist, date, new_name, lieu, expodate])
         #ajouter_exif(new_path, title, artist, date)
         self.current_index += 1
+        self.current_oeuvre += 1
+        self.current_cartel += 1
+
+        print(self.current_index)
+        print(self.current_oeuvre)
+        print(self.current_cartel)
         
         if self.current_index < len(self.image_pairs):
-            self.show_images()
+            self.show_images(self.current_index)
         else:
             self.finish_process()
 
