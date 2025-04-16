@@ -293,8 +293,8 @@ class ImageRenamerApp:
         self.csv_data.append([title, artist, date, new_name, lieu, expodate])
         # ajouter_exif(new_path, title, artist, date)
 
-        self.current_oeuvre += 1
-        self.current_cartel += 1
+        self.current_oeuvre += 2
+        self.current_cartel += 2
 
         if self.current_oeuvre < len(self.oeuvres):
             self.show_images()
