@@ -24,8 +24,9 @@ URL = f'https://api.airtable.com/v0/{BASE_ID}/{TABLE_NAME}'
 
 
 def nettoyer_nom(nom):
-    if (nom):
-        return re.sub(r'[^a-zA-Z0-9_]', '_', nom)
+    if nom:
+        caracteres_interdits = r'[\/:*?"<>|]'
+        return re.sub(caracteres_interdits, '_', nom)
     else:
         return ""
 

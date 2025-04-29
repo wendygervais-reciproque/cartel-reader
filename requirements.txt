@@ -4,3 +4,4 @@ numpy
 tk
 piexif
 requests
+pillow_heif
