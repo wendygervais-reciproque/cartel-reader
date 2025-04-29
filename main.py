@@ -284,7 +284,7 @@ class ImageRenamerApp:
         lieu = self.lieu_expo.get().strip()
         expodate = self.date_expo.get().strip()
 
-        new_name = f"{os.path.basename(art_path).split('.')[0]}_{nettoyer_nom(title)}_{nettoyer_nom(artist)}_{nettoyer_nom(date)}.jpg"
+        new_name = f"{os.path.basename(art_path).split('.')[0]}_{nettoyer_nom(artist)}_{nettoyer_nom(title)}_{nettoyer_nom(date)}.jpg"
         new_path = os.path.join(os.path.dirname(art_path), new_name)
 
         # ✅ Correction ici
