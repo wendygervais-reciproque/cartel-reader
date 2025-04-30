@@ -15,6 +15,7 @@ import piexif
 from pillow_heif import register_heif_opener
 from datetime import datetime
 import locale
+
 locale.setlocale(locale.LC_TIME, 'fr_FR.UTF-8')  # Pour Linux et macOS
 # locale.setlocale(locale.LC_TIME, 'French_France.1252')  # Pour Windows
 
@@ -267,9 +268,9 @@ class ImageRenamerApp:
     def update_progress_bar(self, value):
         """Met à jour la barre de progression et masque/affiche en fonction de la valeur."""
         if value == 0 or value == 100:
-            self.progress_bar.pack_forget()  # Masquer la barre de progression si à 0 ou 100
+            self.progress_bar.pack_forget()   
         else:
-            self.progress_bar.pack(pady=10)  # Afficher la barre de progression
+            self.progress_bar.pack(pady=10)  
         self.progress_bar["value"] = value
 
     def save_and_next(self):
@@ -287,7 +288,6 @@ class ImageRenamerApp:
         new_name = f"{os.path.basename(art_path).split('.')[0]}_{nettoyer_nom(artist)}_{nettoyer_nom(title)}_{nettoyer_nom(date)}.jpg"
         new_path = os.path.join(os.path.dirname(art_path), new_name)
 
-        # ✅ Correction ici
         os.rename(art_path, new_path)
         self.oeuvres[self.current_oeuvre] = new_path  # Mettre à jour la référence au nouveau nom
 
